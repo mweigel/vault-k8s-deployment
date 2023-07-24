@@ -1,0 +1,69 @@
+global:
+  enabled: true
+  tlsDisable: false
+
+# Disable the Vault Agent injector.
+injector:
+  enabled: false
+
+# Configure the Vault HA cluster.
+server:
+  image:
+    tag: "1.12.7"
+
+  serviceAccount:
+    name: vault
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::${account}:role/vault-kms-unseal-role"
+
+  extraEnvironmentVars:
+    VAULT_CACERT: /vault/userconfig/vault-ha-tls/ca.crt
+    VAULT_TLSCERT: /vault/userconfig/vault-ha-tls/vault.crt
+    VAULT_TLSKEY: /vault/userconfig/vault-ha-tls/vault.key
+  volumes:
+    - name: userconfig-vault-ha-tls
+      secret:
+        defaultMode: 420
+        secretName: vault-ha-tls
+  volumeMounts:
+    - mountPath: /vault/userconfig/vault-ha-tls
+      name: userconfig-vault-ha-tls
+      readOnly: true
+  standalone:
+    enabled: false
+  affinity: ""
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = false
+        disable_mlock = true
+
+        seal "awskms" {
+           region     = "ap-southeast-2"
+           kms_key_id = "${key_id}"
+           endpoint   = "kms.ap-southeast-2.amazonaws.com"
+
+           # Fixes for Vault 1.14+ - https://github.com/hashicorp/vault/issues/21478
+           # role_arn = "arn:aws:iam::${account}:role/vault-kms-unseal-role"
+           # web_identity_token_file = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+        }
+
+        listener "tcp" {
+           address = "[::]:8200"
+           cluster_address = "[::]:8201"
+           tls_cert_file = "/vault/userconfig/vault-ha-tls/vault.crt"
+           tls_key_file  = "/vault/userconfig/vault-ha-tls/vault.key"
+           tls_client_ca_file = "/vault/userconfig/vault-ha-tls/ca.crt"
+           tls_min_version = "tls12"
+           tls_cipher_suites = ""
+        }
+
+        storage "raft" {
+           path = "/vault/data"
+        }
+
+        service_registration "kubernetes" {}

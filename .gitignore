@@ -1,1 +1,3 @@
+certs
 cluster-keys.json
+id_rsa*
