@@ -1,3 +1,6 @@
 certs
 cluster-keys.json
 id_rsa*
+.terraform*
+*.tfstate*
+override-values-auto.yml
